@@ -13,3 +13,5 @@ Script to allow for RTBH routes to be injected into the network for your ASN, or
 
 - This script does no checking whatsoever to see if you're allowed to advertise the prefix/asn pair - we expect your upstream routers to be applying the right policies and filters
 - If the FRR instance is restarted, the script won't remember what was previously advertised for blackholing - you'll need to wrap this helper with something else todo that for you
+
+# How to use
