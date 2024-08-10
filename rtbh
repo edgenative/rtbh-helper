@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+import argparse
+import subprocess
+import json
+import ipaddress
+
+#
+# Configuration Options
+#
+# Specify the communities for RTBH triggering for Global RTBH Scope (e.g. causes your routers to export the prefixes beyond just your network).
+#
+originated_community = "35008:666,35008:53" # Community for routes originated by your ASN
+customer_community = "35008:666,35008:52" # Community for routes originated by your customer ASNs
+
+#
+# Specify the communities for RTBH triggering within your network (e.g. causes your local routes to blackhole, but doesn't advertise to transits/peers)
+# You may not use this in your network
+#
+local_originated_community = "35008:888,35008:53" # Community for routes originated by your ASN
+local_customer_community = "35008:888,35008:52" # Community for routes originated by your customer ASNs
+
+
+def validate_ipv4(ipv4_str):
+    try:
+        return str(ipaddress.IPv4Address(ipv4_str))
+    except ipaddress.AddressValueError as e:
+        raise argparse.ArgumentTypeError(f"{ipv4_str} is not a valid IPv4 address: {e}")
+
+def validate_ipv6(ipv6_str):
+    try:
+        return str(ipaddress.IPv6Address(ipv6_str))
+    except ipaddress.AddressValueError as e:
+        raise argparse.ArgumentTypeError(f"{ipv6_str} is not a valid IPv6 address: {e}")
+
+def validate_asn(asn_str):
+    try:
+        asn = int(asn_str)
+        if 1 <= asn <= 4294967295:
+            return asn
+        else:
+            raise argparse.ArgumentTypeError("ASN must be in the range 1-4294967295")
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"{asn_str} is not a valid ASN: {e}")
+
+def format_origin(route_data):
+    attrs = route_data.get('attrs', [{}])
+    for attr in attrs:
+        as_paths = attr.get('as_paths', [])
+        if as_paths:
+            return str(as_paths[0]['asns'][0])
+    return "I"
+
+def list_routes_auto():
+    address_families = ["ipv4", "ipv6"]
+    found_routes = False
+
+    for address_family in address_families:
+        command = f"gobgp global rib -a {address_family} -j"
+        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        if result.returncode == 0:
+            try:
+                parsed_output = json.loads(result.stdout)
+                if parsed_output:
+                    for prefix, route_data_list in parsed_output.items():
+                        for route_data in route_data_list:
+                            origin = format_origin(route_data)
+                            print(f"Route: {prefix} Origin: {origin}")
+                            found_routes = True
+            except json.JSONDecodeError as e:
+                print(f"Error: Unable to parse JSON output from gobgp ({address_family}): {e}")
+                print(result.stdout)
+        else:
+            print(f"Error: {result.stderr}")
+
+    if not found_routes:
+        print("No routes found.")
+
+def auto_detect_family(address):
+    try:
+        ipaddress.IPv4Address(address)
+        return "ipv4"
+    except ipaddress.AddressValueError:
+        try:
+            ipaddress.IPv6Address(address)
+            return "ipv6"
+        except ipaddress.AddressValueError as e:
+            raise argparse.ArgumentTypeError(f"{address} is not a valid IPv4 or IPv6 address: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Manage routes using gobgpd")
+    parser.add_argument("--ipv4", type=validate_ipv4, help="IPv4 address (e.g., 194.246.109.5)")
+    parser.add_argument("--ipv6", type=validate_ipv6, help="IPv6 address (e.g., 2001:db8::1)")
+    parser.add_argument("--asn", type=validate_asn, help="ASN for route origin")
+    parser.add_argument("--advertise", action="store_true", help="Advertise the route")
+    parser.add_argument("--withdraw", metavar="ADDRESS", help="Withdraw the route for the specified address")
+    parser.add_argument("--list", action="store_true", help="List currently advertised routes")
+
+    args, unknown_args = parser.parse_known_args()
+
+    if args.list:
+        list_routes_auto()
+    elif args.withdraw:
+        address = args.withdraw
+        try:
+            ipaddress.ip_address(address)
+        except ValueError as e:
+            print(f"Error: {address} is not a valid IPv4 or IPv6 address: {e}")
+            return
+
+        address_family = auto_detect_family(address)
+        prefix_length = "32" if "." in address else "128"
+        command = f"gobgp global rib -a {address_family} del {address}/{prefix_length} -j"
+        subprocess.run(command, shell=True)
+        print(f"Withdrew route: {address}/{prefix_length}")
+    elif args.advertise:
+        if not args.ipv4 and not args.ipv6:
+            # Auto-detect address family if neither --ipv4 nor --ipv6 is provided
+            if unknown_args:
+                address = unknown_args[0]
+                address_family = auto_detect_family(address)
+            else:
+                parser.error("Please provide either --ipv4 or --ipv6 when using --advertise")
+        else:
+            # Use provided --ipv4 or --ipv6 argument
+            address = args.ipv4 or args.ipv6
+            address_family = auto_detect_family(address)
+
+        prefix_length = "32" if address_family == "ipv4" else "128"
+        command = f"gobgp global rib -a {address_family} add {address}/{prefix_length}"
+        if args.asn:
+            command += f" origin igp aspath {args.asn} community {customer_community}"
+        else:
+            command += f" origin igp community {originated_community}"
+        subprocess.run(command, shell=True)
+        print(f"Advertised route: {address}/{prefix_length}")
+    else:
+        print("Please provide a valid command: --advertise, --withdraw, or --list")
+
+if __name__ == "__main__":
+    main()
