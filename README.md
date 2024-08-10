@@ -3,8 +3,10 @@ Script to allow for RTBH routes to be injected into the network for your ASN, or
 
 # Requirements
 
-- FRR setup and configured on the local machine, with BGP sessions to the right devices in your network and policy to protect your network
-- BGP policies for originated and customer RTBH
+- Know what you're doing with RTBH :-)
+- Have FRR setup and configured on the local machine, with BGP sessions and policy to the right devices in your network
+- Have BGP policies to protect yourself from doing something silly with this script (e.g. trying to RTBH something you shouldn't and leaking that to your upstreams)
+- BGP policies and communities for originated and customer RTBH
 - Optionally, BGP policies and communities for local RTBH (e.g. blackhole inside my network) and global RTBH (e.g. send blackhole communities to transits/peers)
 
 # Caveats
