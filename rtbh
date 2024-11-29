@@ -4,21 +4,13 @@ import subprocess
 import json
 import ipaddress
 
-#
-# Configuration Options
-#
-# Specify the communities for RTBH triggering for Global RTBH Scope (e.g. causes your routers to export the prefixes beyond just your network).
-#
-originated_community = "35008:666,35008:53" # Community for routes originated by your ASN
-customer_community = "35008:666,35008:52" # Community for routes originated by your customer ASNs
+originated_community = "35008:666,35008:53"
+customer_community = "35008:666,35008:52"
 
-#
-# Specify the communities for RTBH triggering within your network (e.g. causes your local routes to blackhole, but doesn't advertise to transits/peers)
-# You may not use this in your network
-#
-local_originated_community = "35008:888,35008:53" # Community for routes originated by your ASN
-local_customer_community = "35008:888,35008:52" # Community for routes originated by your customer ASNs
-
+local_originated_community = "35008:888,35008:53"
+local_customer_community = "35008:888,35008:52"
+local_originated_community_with_asn = "35008:888,35008:54"
+local_customer_originated_community = "35008:888,35008:55"
 
 def validate_ipv4(ipv4_str):
     try:
@@ -91,12 +83,21 @@ def main():
     parser = argparse.ArgumentParser(description="Manage routes using gobgpd")
     parser.add_argument("--ipv4", type=validate_ipv4, help="IPv4 address (e.g., 194.246.109.5)")
     parser.add_argument("--ipv6", type=validate_ipv6, help="IPv6 address (e.g., 2001:db8::1)")
-    parser.add_argument("--asn", type=validate_asn, help="ASN for route origin")
+    parser.add_argument("--asn", type=validate_asn, help="ASN for route origin, default is local")
     parser.add_argument("--advertise", action="store_true", help="Advertise the route")
     parser.add_argument("--withdraw", metavar="ADDRESS", help="Withdraw the route for the specified address")
     parser.add_argument("--list", action="store_true", help="List currently advertised routes")
+    parser.add_argument("--scope", choices=["local"], help="Set the scope to local, and don't advertise to upstreams")
 
     args, unknown_args = parser.parse_known_args()
+
+    # Set the appropriate communities based on the scope
+    if args.scope == "local":
+        originated_community_to_use = local_originated_community
+        customer_community_to_use = local_customer_community
+    else:
+        originated_community_to_use = originated_community
+        customer_community_to_use = customer_community
 
     if args.list:
         list_routes_auto()
@@ -128,10 +129,12 @@ def main():
 
         prefix_length = "32" if address_family == "ipv4" else "128"
         command = f"gobgp global rib -a {address_family} add {address}/{prefix_length}"
+
         if args.asn:
-            command += f" origin igp aspath {args.asn} community {customer_community}"
+            command += f" origin igp aspath {args.asn} community {local_originated_community_with_asn if args.scope == 'local' else customer_community_to_use}"
         else:
-            command += f" origin igp community {originated_community}"
+            command += f" origin igp community {originated_community_to_use}"
+
         subprocess.run(command, shell=True)
         print(f"Advertised route: {address}/{prefix_length}")
     else:
