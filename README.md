@@ -1,5 +1,5 @@
 # rtbh-helper
-Script to allow for RTBH routes to be injected into the network for your ASN, or your customer.  I'm using this to locally rtbh bad actors hitting my web servers
+Script to allow for RTBH routes to be injected into the network for your ASN, or your customer.  I'm using this to locally rtbh bad actors hitting my web servers.  Not sure if this will be useful to anyone, mostly putting it here to backup the code :-)
 
 # Requirements
 
