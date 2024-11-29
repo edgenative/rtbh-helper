@@ -129,7 +129,7 @@ def main():
         command = f"gobgp global rib -a {address_family} add {address}/{prefix_length}"
 
         if args.asn:
-            command += f" origin igp aspath {args.asn} community {local_originated_community_with_asn if args.scope == 'local' else customer_community_to_use}"
+            command += f" origin igp aspath {args.asn} community {local_customer_community if args.scope == 'local' else customer_community_to_use}"
         else:
             command += f" origin igp community {originated_community_to_use}"
 
