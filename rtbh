@@ -9,8 +9,6 @@ customer_community = "35008:666,35008:52"
 
 local_originated_community = "35008:888,35008:53"
 local_customer_community = "35008:888,35008:52"
-local_originated_community_with_asn = "35008:888,35008:54"
-local_customer_originated_community = "35008:888,35008:55"
 
 def validate_ipv4(ipv4_str):
     try:
